@@ -1,0 +1,7 @@
+fastapi
+uvicorn
+requests
+pyngrok
+PyGithub
+pynacl
+llama-cpp-python
