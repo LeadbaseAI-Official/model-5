@@ -2,11 +2,13 @@ import os
 import time
 import json
 import base64
+import re
+import subprocess
 import uvicorn
 import threading
+from typing import Optional
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from pyngrok import ngrok
 from github import Github, Auth
 from github.GithubException import UnknownObjectException
 
@@ -16,6 +18,53 @@ app: FastAPI = FastAPI(title="Local GGUF LLM API Server")
 
 class ChatRequest(BaseModel):
     prompt: str
+
+# Global handle for cloudflared process
+tunnel_process: Optional[subprocess.Popen] = None
+
+# ---------------------------------------------------------------------------
+# Cloudflare Tunnel Manager
+# ---------------------------------------------------------------------------
+def start_cloudflare_tunnel() -> Optional[str]:
+    global tunnel_process
+    cmd: str = "./cloudflared" if os.path.exists("./cloudflared") else "cloudflared"
+    
+    try:
+        subprocess.run([cmd, "--version"], capture_output=True, check=True)
+    except Exception as e:
+        print(f"cloudflared binary not found or not working: {e}. Running without tunnel.", flush=True)
+        return None
+
+    print(f"Starting cloudflared tunnel using: {cmd}", flush=True)
+    try:
+        log_file = open("tunnel.log", "w")
+        tunnel_process = subprocess.Popen(
+            [cmd, "tunnel", "--url", "http://localhost:8000"],
+            stdout=log_file,
+            stderr=subprocess.STDOUT
+        )
+        
+        # Wait up to 15 seconds to extract the trycloudflare.com URL
+        url: Optional[str] = None
+        for i in range(15):
+            time.sleep(1)
+            if os.path.exists("tunnel.log"):
+                with open("tunnel.log", "r") as f:
+                    content: str = f.read()
+                    match = re.search(r"https://[a-zA-Z0-9-]+\.trycloudflare\.com", content)
+                    if match:
+                        url = match.group(0)
+                        break
+        log_file.close()
+        
+        if url:
+            return url
+        else:
+            print("Failed to extract Cloudflare tunnel URL from tunnel.log.", flush=True)
+            return None
+    except Exception as ex:
+        print(f"Failed to start cloudflared tunnel process: {ex}", flush=True)
+        return None
 
 # ---------------------------------------------------------------------------
 # GitHub DNS Updater & Dispatcher
@@ -103,13 +152,15 @@ def shutdown_timer(pat: str, org: str, repo_name: str, duration_hours: float) ->
     # 2. Short wait to allow dispatch request to register
     time.sleep(5)
     
-    # 3. Kill ngrok
-    try:
-        ngrok.disconnect()
-        ngrok.kill()
-        print("ngrok tunnel closed.", flush=True)
-    except Exception as ne:
-        print(f"Error closing ngrok: {ne}", flush=True)
+    # 3. Kill cloudflared tunnel
+    global tunnel_process
+    if tunnel_process:
+        try:
+            tunnel_process.terminate()
+            tunnel_process.wait(timeout=5)
+            print("cloudflared tunnel terminated.", flush=True)
+        except Exception as te:
+            print(f"Error terminating cloudflared: {te}", flush=True)
         
     print("Exiting server process gracefully with code 0.", flush=True)
     os._exit(0)
@@ -119,7 +170,6 @@ def shutdown_timer(pat: str, org: str, repo_name: str, duration_hours: float) ->
 # ---------------------------------------------------------------------------
 @app.on_event("startup")
 def startup_event() -> None:
-    ngrok_token: str = os.getenv("NGROK_AUTH_TOKEN", "")
     pat: str = os.getenv("GITHUB_PAT", "")
     org: str = os.getenv("GITHUB_ORG", "LeadbaseAI-Official")
 
@@ -141,17 +191,11 @@ def startup_event() -> None:
     )
     t.start()
 
-    if not ngrok_token:
-        print("NGROK_AUTH_TOKEN environment variable not set. Running server without public tunnel.", flush=True)
-        return
-
-    try:
-        # Establish ngrok tunnel on port 8000
-        ngrok.set_auth_token(ngrok_token)
-        tunnel = ngrok.connect(8000, proto="http")
-        public_url: str = tunnel.public_url
+    # Start Cloudflare Quick Tunnel
+    public_url: Optional[str] = start_cloudflare_tunnel()
+    if public_url:
         print(f"==================================================", flush=True)
-        print(f"NGROK TUNNEL ESTABLISHED SUCCESSFULLY!", flush=True)
+        print(f"CLOUDFLARE TUNNEL ESTABLISHED SUCCESSFULLY!", flush=True)
         print(f"Public API Address: {public_url}", flush=True)
         print(f"==================================================", flush=True)
         
@@ -160,9 +204,8 @@ def startup_event() -> None:
             update_github_dns(pat, org, public_url, repo_name)
         else:
             print("Warning: GITHUB_PAT not configured. Skipping DNS config.json registration.", flush=True)
-            
-    except Exception as e:
-        print(f"Failed to initialize ngrok tunnel: {e}", flush=True)
+    else:
+        print("Running server without public tunnel.", flush=True)
 
 # ---------------------------------------------------------------------------
 # Endpoints
