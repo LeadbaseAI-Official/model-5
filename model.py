@@ -39,7 +39,6 @@ def run_model_query(prompt: str) -> str:
         response = llm(
             formatted_prompt,
             max_tokens=256,
-            cache_prompt=True,
         )
         text_result: str = response["choices"][0]["text"]
         return text_result
