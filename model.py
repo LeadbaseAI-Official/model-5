@@ -1,6 +1,6 @@
 from pathlib import Path
 from typing import Optional, Dict, Any
-from llama_cpp import Llama
+from llama_cpp import Llama, GGML_TYPE_Q8_0
 from chat_template import format_chat_prompt
 
 _llm_instance: Optional[Llama] = None
@@ -30,6 +30,8 @@ def get_llm() -> Llama:
             n_threads=4,
             n_ctx=2048,
             flash_attn=True,
+            type_k=GGML_TYPE_Q8_0,
+            type_v=GGML_TYPE_Q8_0,
         )
     return _llm_instance
 
@@ -45,7 +47,7 @@ def run_model_query(prompt: str, jid: Optional[str] = None) -> str:
         formatted_prompt: str = format_chat_prompt(prompt)
         response = llm(
             formatted_prompt,
-            max_tokens=256,
+            max_tokens=150,
         )
         
         # Save updated KV cache state for this conversation
