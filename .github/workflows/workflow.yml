@@ -65,10 +65,12 @@ jobs:
       - name: Create Swap Space for 12B Model
         run: |
           echo "Allocating 10GB swap file..."
-          sudo fallocate -l 10G /swapfile
-          sudo chmod 600 /swapfile
-          sudo mkswap /swapfile
-          sudo swapon /swapfile
+          sudo swapoff /swapfile_gemma || true
+          sudo rm -f /swapfile_gemma || true
+          sudo fallocate -l 10G /swapfile_gemma
+          sudo chmod 600 /swapfile_gemma
+          sudo mkswap /swapfile_gemma
+          sudo swapon /swapfile_gemma
           free -h
 
       - name: Set up Python 3.12
