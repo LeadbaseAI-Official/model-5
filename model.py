@@ -15,7 +15,7 @@ def find_gguf_file() -> Path:
         for path in model_dir.glob("*.gguf"):
             return path
     # Fallback default
-    return Path("gemma-4-12b-it-UD-Q4_K_XL.gguf")
+    return Path("gemma-4-E4B-it-Q5_K_M.gguf")
 
 def get_llm() -> Llama:
     global _llm_instance
