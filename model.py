@@ -28,7 +28,7 @@ def get_llm() -> Llama:
         _llm_instance = Llama(
             model_path=str(model_path),
             n_threads=4,
-            n_ctx=2048,
+            n_ctx=40960,
             flash_attn=True,
             type_k=GGML_TYPE_Q8_0,
             type_v=GGML_TYPE_Q8_0,
