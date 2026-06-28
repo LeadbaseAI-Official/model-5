@@ -28,6 +28,7 @@ def get_llm() -> Llama:
             model_path=str(model_path),
             n_threads=2,
             n_ctx=2048,
+            flash_attn=True,
         )
     return _llm_instance
 
@@ -38,6 +39,7 @@ def run_model_query(prompt: str) -> str:
         response = llm(
             formatted_prompt,
             max_tokens=256,
+            cache_prompt=True,
         )
         text_result: str = response["choices"][0]["text"]
         return text_result
