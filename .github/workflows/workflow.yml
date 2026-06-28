@@ -73,14 +73,24 @@ jobs:
           sudo swapon /swapfile_gemma
           free -h
 
+      - name: Cache Python Virtual Environment
+        id: cache-venv
+        uses: actions/cache@v4
+        with:
+          path: .venv
+          key: venv-${{ runner.os }}-${{ hashFiles('requirements.txt') }}
+
       - name: Set up Python 3.12
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
       - name: Install Python Dependencies
+        if: steps.cache-venv.outputs.cache-hit != 'true'
         run: |
-          pip install -r requirements.txt
+          python -m venv .venv
+          .venv/bin/pip install --upgrade pip
+          .venv/bin/pip install -r requirements.txt
 
       - name: Download cloudflared
         run: |
@@ -92,4 +102,4 @@ jobs:
           GITHUB_PAT: ${{ secrets.GH_PAT }}
           GITHUB_ORG: ${{ secrets.GH_ORG }}
         run: |
-          python -u server.py
+          .venv/bin/python -u server.py
