@@ -26,7 +26,7 @@ def get_llm() -> Llama:
         
         _llm_instance = Llama(
             model_path=str(model_path),
-            n_threads=4,
+            n_threads=2,
             n_ctx=2048,
         )
     return _llm_instance
