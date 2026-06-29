@@ -73,61 +73,68 @@ def start_cloudflare_tunnel() -> Optional[str]:
 # ---------------------------------------------------------------------------
 def update_github_dns(pat: str, org: str, public_url: str, repo_name: str) -> None:
     print(f"Connecting to GitHub using PAT to update dynamic DNS registry...", flush=True)
-    try:
-        auth_obj: Auth.Token = Auth.Token(pat)
-        g: Github = Github(auth=auth_obj)
-        
-        # Target dns repository
-        target_repo_name: str = "dns"
-        full_repo_path: str = f"{org}/{target_repo_name}"
-        
-        repo = g.get_repo(full_repo_path)
-        
-        # Get current config.json contents
+    max_attempts: int = 5
+    for attempt in range(1, max_attempts + 1):
         try:
-            contents = repo.get_contents("config.json")
-            config_bytes: bytes = base64.b64decode(contents.content)
-            sha: str = contents.sha
+            auth_obj: Auth.Token = Auth.Token(pat)
+            g: Github = Github(auth=auth_obj)
+            
+            # Target dns repository
+            target_repo_name: str = "dns"
+            full_repo_path: str = f"{org}/{target_repo_name}"
+            
+            repo = g.get_repo(full_repo_path)
+            
+            # Get current config.json contents
             try:
-                config_data: dict = json.loads(config_bytes.decode("utf-8"))
-                print("Successfully loaded existing config.json.", flush=True)
-            except Exception as parse_err:
-                print(f"Warning: config.json content was not valid JSON ({parse_err}). Initializing fresh dictionary.", flush=True)
+                contents = repo.get_contents("config.json")
+                config_bytes: bytes = base64.b64decode(contents.content)
+                sha: str = contents.sha
+                try:
+                    config_data: dict = json.loads(config_bytes.decode("utf-8"))
+                    print("Successfully loaded existing config.json.", flush=True)
+                except Exception as parse_err:
+                    print(f"Warning: config.json content was not valid JSON ({parse_err}). Initializing fresh dictionary.", flush=True)
+                    config_data = {}
+            except UnknownObjectException:
                 config_data = {}
-        except UnknownObjectException:
-            config_data = {}
-            sha = ""
-            print("config.json not found in dns repo. Creating a fresh registry.", flush=True)
+                sha = ""
+                print("config.json not found in dns repo. Creating a fresh registry.", flush=True)
 
-        # Set key under the specific model code sub-dictionary
-        if MODEL_CODE not in config_data:
-            config_data[MODEL_CODE] = {}
-        
-        # Keep config_data dict clean: remove old flat key if it exists
-        if repo_name in config_data:
-            del config_data[repo_name]
+            # Set key under the specific model code sub-dictionary
+            if MODEL_CODE not in config_data:
+                config_data[MODEL_CODE] = {}
             
-        config_data[MODEL_CODE][repo_name] = public_url
-        updated_json: str = json.dumps(config_data, indent=2)
-        
-        if sha:
-            repo.update_file(
-                path="config.json",
-                message=f"Update {repo_name} endpoint tunnel DNS URL [automated]",
-                content=updated_json,
-                sha=sha
-            )
-            print(f"config.json updated successfully with key '{repo_name}'.", flush=True)
-        else:
-            repo.create_file(
-                path="config.json",
-                message=f"Create tunnel DNS registry config.json with key '{repo_name}' [automated]",
-                content=updated_json
-            )
-            print(f"config.json created successfully with key '{repo_name}'.", flush=True)
+            # Keep config_data dict clean: remove old flat key if it exists
+            if repo_name in config_data:
+                del config_data[repo_name]
+                
+            config_data[MODEL_CODE][repo_name] = public_url
+            updated_json: str = json.dumps(config_data, indent=2)
             
-    except Exception as e:
-        print(f"Error updating GitHub DNS file: {e}", flush=True)
+            if sha:
+                repo.update_file(
+                    path="config.json",
+                    message=f"Update {repo_name} endpoint tunnel DNS URL [automated]",
+                    content=updated_json,
+                    sha=sha
+                )
+                print(f"config.json updated successfully with key '{repo_name}'.", flush=True)
+            else:
+                repo.create_file(
+                    path="config.json",
+                    message=f"Create tunnel DNS registry config.json with key '{repo_name}' [automated]",
+                    content=updated_json
+                )
+                print(f"config.json created successfully with key '{repo_name}'.", flush=True)
+            return
+        except Exception as e:
+            print(f"Error updating GitHub DNS file (attempt {attempt}/{max_attempts}): {e}", flush=True)
+            if attempt < max_attempts:
+                print("Retrying DNS update in 3 seconds...", flush=True)
+                time.sleep(3)
+            else:
+                print("All DNS update attempts failed.", flush=True)
 
 def trigger_self_workflow(pat: str, org: str, repo_name: str) -> None:
     print(f"Triggering self workflow dispatch for repository {repo_name}...", flush=True)
