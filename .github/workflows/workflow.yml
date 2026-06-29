@@ -52,7 +52,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .venv
-          key: venv-${{ runner.os }}-${{ hashFiles('requirements.txt') }}
+          key: venv-${{ runner.os }}-${{ hashFiles('requirements.txt') }}-no-avx-v1
 
       - name: Set up Python 3.12
         uses: actions/setup-python@v5
@@ -64,6 +64,7 @@ jobs:
         run: |
           python -m venv .venv
           .venv/bin/pip install --upgrade pip
+          CMAKE_ARGS="-DLLAMA_AVX=OFF -DLLAMA_AVX2=OFF -DLLAMA_FMA=OFF" .venv/bin/pip install llama-cpp-python --no-cache-dir --force-reinstall --no-binary llama-cpp-python
           .venv/bin/pip install -r requirements.txt
 
   run-server:
@@ -97,7 +98,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .venv
-          key: venv-${{ runner.os }}-${{ hashFiles('requirements.txt') }}
+          key: venv-${{ runner.os }}-${{ hashFiles('requirements.txt') }}-no-avx-v1
 
       - name: Set up Python 3.12
         uses: actions/setup-python@v5
