@@ -12,13 +12,14 @@ from pydantic import BaseModel
 from github import Github, Auth
 from github.GithubException import UnknownObjectException
 
-from model import run_model_query
+from model import run_model_query, MODEL_CODE
 
 app: FastAPI = FastAPI(title="Local GGUF LLM API Server")
 
 class ChatRequest(BaseModel):
     prompt: str
     jid: Optional[str] = None
+    image_base64: Optional[str] = None
 
 # Global handle for cloudflared process
 tunnel_process: Optional[subprocess.Popen] = None
@@ -98,8 +99,15 @@ def update_github_dns(pat: str, org: str, public_url: str, repo_name: str) -> No
             sha = ""
             print("config.json not found in dns repo. Creating a fresh registry.", flush=True)
 
-        # Set key as the current repository name: public_url
-        config_data[repo_name] = public_url
+        # Set key under the specific model code sub-dictionary
+        if MODEL_CODE not in config_data:
+            config_data[MODEL_CODE] = {}
+        
+        # Keep config_data dict clean: remove old flat key if it exists
+        if repo_name in config_data:
+            del config_data[repo_name]
+            
+        config_data[MODEL_CODE][repo_name] = public_url
         updated_json: str = json.dumps(config_data, indent=2)
         
         if sha:
@@ -216,7 +224,7 @@ def chat(req: ChatRequest) -> dict:
     if not req.prompt:
         raise HTTPException(status_code=400, detail="Prompt parameter is required.")
     
-    response_text: str = run_model_query(req.prompt, req.jid)
+    response_text: str = run_model_query(req.prompt, req.jid, req.image_base64)
     return {
         "response": response_text,
         "prompt": req.prompt
