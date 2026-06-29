@@ -56,7 +56,8 @@ def get_llm() -> Llama:
             flash_attn=True,
             type_k=GGML_TYPE_Q8_0,
             type_v=GGML_TYPE_Q8_0,
-            chat_handler=chat_handler
+            chat_handler=chat_handler,
+            cache=True
         )
     return _llm_instance
 
@@ -64,11 +65,6 @@ def run_model_query(prompt: str, jid: Optional[str] = None, image_base64: Option
     try:
         llm: Llama = get_llm()
         
-        # Load KV cache state if it exists for this conversation
-        if jid and jid in _states:
-            llm.load_state(_states[jid])
-            print(f"[Model] Restored KV cache state for JID: {jid}", flush=True)
-            
         if image_base64 and getattr(llm, "chat_handler", None) is not None:
             print(f"[Model] Running vision query with image of size {len(image_base64)} characters", flush=True)
             if not image_base64.startswith("data:image"):
@@ -98,11 +94,6 @@ def run_model_query(prompt: str, jid: Optional[str] = None, image_base64: Option
                 max_tokens=512,
             )
             text_result: str = response["choices"][0]["text"]
-            
-        # Save updated KV cache state for this conversation
-        if jid:
-            _states[jid] = llm.save_state()
-            print(f"[Model] Saved KV cache state for JID: {jid}", flush=True)
             
         return text_result
     except Exception as e:
