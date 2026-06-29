@@ -207,6 +207,16 @@ def startup_event() -> None:
     )
     t.start()
 
+    # --- Model Warmup ---
+    # Run a trivial query before exposing the tunnel so that model weights
+    # are fully loaded into memory and the KV cache is initialised.
+    print("[Warmup] Loading model weights and warming up inference engine...", flush=True)
+    try:
+        warmup_result: str = run_model_query("Hi", jid=None)
+        print(f"[Warmup] Model ready. Warmup response: {warmup_result[:60].strip()!r}", flush=True)
+    except Exception as warmup_err:
+        print(f"[Warmup] Warning: warmup query failed: {warmup_err}", flush=True)
+
     # Start Cloudflare Quick Tunnel
     public_url: Optional[str] = start_cloudflare_tunnel()
     if public_url:
