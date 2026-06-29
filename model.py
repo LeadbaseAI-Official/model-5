@@ -84,7 +84,7 @@ def run_model_query(prompt: str, jid: Optional[str] = None, image_base64: Option
                         ]
                     }
                 ],
-                max_tokens=150
+                max_tokens=512
             )
             text_result: str = response["choices"][0]["message"]["content"]
         else:
@@ -95,7 +95,7 @@ def run_model_query(prompt: str, jid: Optional[str] = None, image_base64: Option
             formatted_prompt: str = format_chat_prompt(prompt)
             response = llm(
                 formatted_prompt,
-                max_tokens=150,
+                max_tokens=512,
             )
             text_result: str = response["choices"][0]["text"]
             
