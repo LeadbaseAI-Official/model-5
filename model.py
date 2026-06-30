@@ -56,10 +56,11 @@ def get_llm() -> Llama:
             flash_attn=True,
             type_k=GGML_TYPE_Q8_0,
             type_v=GGML_TYPE_Q8_0,
-            chat_handler=chat_handler,
-            cache=True
+            chat_handler=chat_handler
         )
     return _llm_instance
+
+_prefix_states: Dict[str, Any] = {}
 
 def run_model_query(prompt: str, jid: Optional[str] = None, image_base64: Optional[str] = None) -> str:
     try:
@@ -89,6 +90,26 @@ def run_model_query(prompt: str, jid: Optional[str] = None, image_base64: Option
                 prompt = f"[User uploaded an image. Base64 length: {len(image_base64)}]\n{prompt}"
             
             formatted_prompt: str = format_chat_prompt(prompt)
+            
+            # Extract fixed prefix up to Conversation History
+            parts = formatted_prompt.split("Conversation History:")
+            if len(parts) > 1:
+                prefix = parts[0] + "Conversation History:"
+            else:
+                prefix = formatted_prompt
+                
+            prefix_tokens = llm.tokenize(prefix.encode("utf-8"))
+            
+            # Load prefix cache state if it matches, otherwise build it
+            if prefix in _prefix_states:
+                llm.load_state(_prefix_states[prefix])
+                print(f"[Model] Restored prefix cache ({len(prefix_tokens)} tokens)", flush=True)
+            else:
+                llm.reset()
+                llm.eval(prefix_tokens)
+                _prefix_states[prefix] = llm.save_state()
+                print(f"[Model] Evaluated and cached new prefix ({len(prefix_tokens)} tokens)", flush=True)
+            
             response = llm(
                 formatted_prompt,
                 max_tokens=512,
